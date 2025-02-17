@@ -2,7 +2,7 @@ from django.db import connection
 
 def getTopRentedFilms(limit=5):
     with connection.cursor() as cursor:
-        cursor.execute(f"""SELECT f.title, c.name AS category, f.description, f.length, f.rating, f.special_features, f.release_year, COUNT(r.rental_id) AS rental_count
+        cursor.execute(f"""SELECT f.film_id, f.title, c.name AS category, COUNT(r.rental_id) AS rental_count
                        FROM film f
                        JOIN film_category fc ON f.film_id = fc.film_id
                        JOIN category c ON fc.category_id = c.category_id
@@ -11,6 +11,15 @@ def getTopRentedFilms(limit=5):
                        GROUP BY f.film_id, f.title, category 
                        ORDER BY rental_count DESC, title
                        LIMIT {limit};
+                       """)
+        columns = [col[0] for col in cursor.description]
+        return [dict(zip(columns, row)) for row in cursor.fetchall()]
+    
+def getFilmDetails(filmId):
+    with connection.cursor() as cursor:
+        cursor.execute(f"""SELECT f.title, f.description, f.release_year, f.rental_rate, f.length, f.rating
+                       FROM film f
+                       WHERE f.film_id = {filmId};
                        """)
         columns = [col[0] for col in cursor.description]
         return [dict(zip(columns, row)) for row in cursor.fetchall()]
