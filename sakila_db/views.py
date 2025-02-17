@@ -1,17 +1,17 @@
-from django.shortcuts import render
+from rest_framework.views import APIView
+from rest_framework.response import Response
+from rest_framework import status
 from django.http import JsonResponse
 from sakila_db.services import getFilmDetails, getTopRentedFilms
 
 # Create your views here.
 
-def getTopFilms(request, limit=5):
-    filmList = getTopRentedFilms(limit)
-    return JsonResponse({
-        "top_films": filmList,
-    })
+class TopRentedFilmsView(APIView):
+    def get(self, request, limit=5):
+        filmList = getTopRentedFilms(limit)
+        return Response(filmList, status=status.HTTP_200_OK)
 
-def getFilm(request, filmId):
-    filmDetails = getFilmDetails(filmId)
-    return JsonResponse({
-        "film_details": filmDetails,
-    })
+class FilmView(APIView):
+    def get(self, request, filmId):
+        filmDetails = getFilmDetails(filmId)
+        return Response(filmDetails, status=status.HTTP_200_OK)
