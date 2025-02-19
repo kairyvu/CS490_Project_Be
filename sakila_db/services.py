@@ -17,12 +17,15 @@ def getTopRentedFilms(limit=5):
     
 def getFilmDetails(filmId):
     with connection.cursor() as cursor:
-        cursor.execute(f"""SELECT f.title, f.description, f.release_year, f.rental_rate, f.length, f.rating
+        cursor.execute(f"""SELECT f.title, f.description, f.release_year, f.rental_rate, f.length, f.rating, f.special_features
                        FROM film f
                        WHERE f.film_id = {filmId};
                        """)
         columns = [col[0] for col in cursor.description]
-        return [dict(zip(columns, row)) for row in cursor.fetchall()]
+        result = cursor.fetchone()
+        if result:
+            return dict(zip(columns, result))
+        return None
     
 def getTopActors(limit=5):
     with connection.cursor() as cursor:
