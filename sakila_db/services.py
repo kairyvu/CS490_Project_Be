@@ -1,5 +1,19 @@
 from django.db import connection
 
+def getAllFilms():
+    with connection.cursor() as cursor:
+        cursor.execute("""SELECT f.film_id, f.title, f.description, f.release_year, f.rental_rate, f.length, f.rating, f.special_features, c.name AS category, COUNT(r.rental_id) AS rental_count
+                       FROM film f
+                       JOIN film_category fc ON f.film_id = fc.film_id
+                       JOIN category c ON fc.category_id = c.category_id
+                       JOIN inventory i ON f.film_id = i.film_id
+                       LEFT JOIN rental r ON i.inventory_id = r.inventory_id
+                       GROUP BY f.film_id, f.title, category
+                       ORDER BY f.title;
+                       """)
+        columns = [col[0] for col in cursor.description]
+        return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
 def getTopRentedFilms(limit=5):
     with connection.cursor() as cursor:
         cursor.execute(f"""SELECT f.film_id, f.title, c.name AS category, COUNT(r.rental_id) AS rental_count
@@ -17,9 +31,14 @@ def getTopRentedFilms(limit=5):
     
 def getFilmDetails(filmId):
     with connection.cursor() as cursor:
-        cursor.execute(f"""SELECT f.title, f.description, f.release_year, f.rental_rate, f.length, f.rating, f.special_features
+        cursor.execute(f"""SELECT f.title, f.description, f.release_year, f.rental_rate, f.length, f.rating, f.special_features, c.name AS category, COUNT(r.rental_id) AS rental_count
                        FROM film f
-                       WHERE f.film_id = {filmId};
+                       JOIN film_category fc ON f.film_id = fc.film_id
+                       JOIN category c ON fc.category_id = c.category_id
+                       JOIN inventory i ON f.film_id = i.film_id
+                       LEFT JOIN rental r ON i.inventory_id = r.inventory_id 
+                       WHERE f.film_id = {filmId}
+                       GROUP BY f.film_id, c.name;
                        """)
         columns = [col[0] for col in cursor.description]
         result = cursor.fetchone()

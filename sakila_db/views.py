@@ -2,10 +2,15 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
 from django.http import JsonResponse
-from sakila_db.services import getActorDetails, getFilmDetails, getTopActors, getTopRentedFilms
+from sakila_db.services import getActorDetails, getFilmDetails, getTopActors, getTopRentedFilms, getAllFilms
 
 # Create your views here.
 
+class FilmListView(APIView):
+    def get(self, request):
+        filmList = getAllFilms()
+        return Response(filmList, status=status.HTTP_200_OK)
+    
 class TopRentedFilmsView(APIView):
     def get(self, request, limit=5):
         filmList = getTopRentedFilms(limit)
