@@ -1,8 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.http import JsonResponse
-from sakila_db.services import getActorDetails, getFilmDetails, getTopActors, getTopRentedFilms, getAllFilms
+from sakila_db.services import getActorDetails, getFilmDetails, getTopActors, getTopRentedFilms, getAllFilms, getAllCustomers
 
 # Create your views here.
 
@@ -30,3 +29,8 @@ class ActorView(APIView):
     def get(self, request, actorId):
         actorDetails = getActorDetails(actorId)
         return Response(actorDetails, status=status.HTTP_200_OK)
+
+class CustomerListView(APIView):
+    def get(self, request):
+        customerList = getAllCustomers()
+        return Response(customerList, status=status.HTTP_200_OK)

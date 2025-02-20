@@ -76,3 +76,13 @@ def getActorDetails(actorId):
                        """)
         columns = [col[0] for col in cursor.description]
         return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+
+def getAllCustomers():
+    with connection.cursor() as cursor:
+        cursor.execute(f"""SELECT customer_id, first_name, last_name, email, address, active, create_date 
+                       FROM customer c
+                       JOIN address a ON c.address_id = a.address_id;
+                       """)
+        columns = [col[0] for col in cursor.description]
+        return [dict(zip(columns, row)) for row in cursor.fetchall()]
