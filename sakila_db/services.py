@@ -86,3 +86,21 @@ def getAllCustomers():
                        """)
         columns = [col[0] for col in cursor.description]
         return [dict(zip(columns, row)) for row in cursor.fetchall()]
+    
+def getCustomerRentalHistory(customerId):
+    with connection.cursor() as cursor:
+        cursor.execute(f"""SELECT c.first_name, c.last_name, f.title AS film_title, r.rental_date, r.return_date,
+                       CASE 
+                        WHEN r.return_date IS NULL THEN 'Currently Rented'
+                        ELSE 'Returned'
+                       END AS rental_status
+                       FROM customer c
+                       JOIN address a ON c.address_id = a.address_id
+                       JOIN rental r ON c.customer_id = r.customer_id
+                       JOIN inventory i ON r.inventory_id = i.inventory_id
+                       JOIN film f ON i.film_id = f.film_id
+                       WHERE c.customer_id = {customerId}
+                       ORDER BY r.rental_date DESC;
+                       """)
+        columns = [col[0] for col in cursor.description]
+        return [dict(zip(columns, row)) for row in cursor.fetchall()]

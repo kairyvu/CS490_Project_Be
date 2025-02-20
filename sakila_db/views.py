@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from sakila_db.services import getActorDetails, getFilmDetails, getTopActors, getTopRentedFilms, getAllFilms, getAllCustomers
+from sakila_db.services import getActorDetails, getFilmDetails, getTopActors, getTopRentedFilms, getAllFilms, getAllCustomers, getCustomerRentalHistory
 
 # Create your views here.
 
@@ -34,3 +34,8 @@ class CustomerListView(APIView):
     def get(self, request):
         customerList = getAllCustomers()
         return Response(customerList, status=status.HTTP_200_OK)
+    
+class CustomerRentalsView(APIView):
+    def get(self, request, customerId):
+        customerRentals = getCustomerRentalHistory(customerId)
+        return Response(customerRentals, status=status.HTTP_200_OK)
