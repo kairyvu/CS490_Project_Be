@@ -2,12 +2,14 @@ from django.db import connection
 
 def getAllFilms():
     with connection.cursor() as cursor:
-        cursor.execute("""SELECT f.film_id, f.title, f.description, f.release_year, f.rental_rate, f.length, f.rating, f.special_features, c.name AS category, COUNT(r.rental_id) AS rental_count
+        cursor.execute("""SELECT f.film_id, f.title, f.description, f.release_year, f.rental_rate, f.length, f.rating, f.special_features, c.name AS category, COUNT(r.rental_id) AS rental_count, GROUP_CONCAT(DISTINCT CONCAT(UCASE(LEFT(a.first_name, 1)), LCASE(SUBSTRING(a.first_name, 2)), ' ', UCASE(LEFT(a.last_name, 1)), LCASE(SUBSTRING(a.last_name, 2))) ORDER BY a.first_name SEPARATOR ', ') AS actors
                        FROM film f
                        JOIN film_category fc ON f.film_id = fc.film_id
                        JOIN category c ON fc.category_id = c.category_id
                        JOIN inventory i ON f.film_id = i.film_id
                        LEFT JOIN rental r ON i.inventory_id = r.inventory_id
+                       JOIN film_actor fa ON f.film_id = fa.film_id
+                       JOIN actor a ON fa.actor_id = a.actor_id
                        GROUP BY f.film_id, f.title, category
                        ORDER BY f.title;
                        """)
@@ -31,12 +33,14 @@ def getTopRentedFilms(limit=5):
     
 def getFilmDetails(filmId):
     with connection.cursor() as cursor:
-        cursor.execute(f"""SELECT f.title, f.description, f.release_year, f.rental_rate, f.length, f.rating, f.special_features, c.name AS category, COUNT(r.rental_id) AS rental_count
+        cursor.execute(f"""SELECT f.title, f.description, f.release_year, f.rental_rate, f.length, f.rating, f.special_features, c.name AS category, COUNT(r.rental_id) AS rental_count, GROUP_CONCAT(DISTINCT CONCAT(UCASE(LEFT(a.first_name, 1)), LCASE(SUBSTRING(a.first_name, 2)), ' ', UCASE(LEFT(a.last_name, 1)), LCASE(SUBSTRING(a.last_name, 2))) ORDER BY a.first_name SEPARATOR ', ') AS actors 
                        FROM film f
                        JOIN film_category fc ON f.film_id = fc.film_id
                        JOIN category c ON fc.category_id = c.category_id
                        JOIN inventory i ON f.film_id = i.film_id
-                       LEFT JOIN rental r ON i.inventory_id = r.inventory_id 
+                       LEFT JOIN rental r ON i.inventory_id = r.inventory_id
+                       LEFT JOIN film_actor fa ON f.film_id = fa.film_id
+                       LEFT JOIN actor a ON fa.actor_id = a.actor_id
                        WHERE f.film_id = {filmId}
                        GROUP BY f.film_id, c.name;
                        """)
