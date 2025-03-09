@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import TopRentedFilmsView, FilmView, FilmListView, CustomerListView, CustomerRentalsView, TopActorsView, ActorView
+from .views import TopRentedFilmsView, FilmView, FilmListView, CustomerListView, CustomerRentalsView, TopActorsView, ActorView, UpdateCustomerView
 
 urlpatterns = [
     path('api/films/', FilmListView.as_view(), name='getAllFilms'),
@@ -8,5 +8,6 @@ urlpatterns = [
     path('api/actors/top/', TopActorsView.as_view(), name='getTopActors'),
     path('api/actor/<int:actorId>/', ActorView.as_view(), name='getActor'),
     path('api/customers/', CustomerListView.as_view(), name='getAllCustomers'),
-    path('api/customer/<int:customerId>/rentals/', CustomerRentalsView.as_view(), name='getCustomerRentals')
+    path('api/customer/<int:customerId>/rentals/', CustomerRentalsView.as_view(), name='getCustomerRentals'),
+    path('api/update-customer/', UpdateCustomerView.as_view(), name='update_customer'),  # Ensure trailing slash here
 ]

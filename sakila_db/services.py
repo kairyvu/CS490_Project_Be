@@ -1,5 +1,10 @@
 from django.db import connection
 
+from django.utils import timezone
+from rest_framework.exceptions import NotFound
+from .models import Customer, Address, City, Country
+from django.db import transaction
+
 def getAllFilms():
     with connection.cursor() as cursor:
         cursor.execute("""SELECT f.film_id, f.title, f.description, f.release_year, f.rental_rate, f.length, f.rating, f.special_features, c.name AS category, COUNT(r.rental_id) AS rental_count, GROUP_CONCAT(DISTINCT CONCAT(UCASE(LEFT(a.first_name, 1)), LCASE(SUBSTRING(a.first_name, 2)), ' ', UCASE(LEFT(a.last_name, 1)), LCASE(SUBSTRING(a.last_name, 2))) ORDER BY a.first_name SEPARATOR ', ') AS actors
@@ -84,9 +89,12 @@ def getActorDetails(actorId):
 
 def getAllCustomers():
     with connection.cursor() as cursor:
-        cursor.execute(f"""SELECT customer_id, first_name, last_name, email, address, active, create_date 
-                       FROM customer c
-                       JOIN address a ON c.address_id = a.address_id;
+        cursor.execute(f"""SELECT customer.customer_id, customer.first_name, customer.last_name, customer.email, customer.active, address.address, address.district, city.city, country.country, address.phone, customer.create_date
+                       FROM customer
+                       JOIN address ON customer.address_id = address.address_id
+                       JOIN city ON address.city_id = city.city_id
+                       JOIN country ON city.country_id = country.country_id
+                       ORDER BY customer.customer_id;
                        """)
         columns = [col[0] for col in cursor.description]
         return [dict(zip(columns, row)) for row in cursor.fetchall()]
@@ -108,3 +116,39 @@ def getCustomerRentalHistory(customerId):
                        """)
         columns = [col[0] for col in cursor.description]
         return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+def update_customer_info(customer_data):
+    try:
+        with transaction.atomic():
+            customer = Customer.objects.get(customer_id=customer_data['customer_id'])
+            customer.first_name = customer_data['first_name']
+            customer.last_name = customer_data['last_name']
+            customer.email = customer_data['email']
+            customer.save()
+
+            address = customer.address
+            address.address = customer_data['address']
+            address.district = customer_data['district']
+            address.phone = customer_data['phone']
+            address.save()
+
+            city = address.city
+            city.city = customer_data['city']
+            city.save()
+
+            country = city.country
+            country.country = customer_data['country']
+            country.save()
+
+        return {"message": "Customer and related records updated successfully"}
+
+    except Customer.DoesNotExist:
+        return {"error": "Customer not found"}
+    except Address.DoesNotExist:
+        return {"error": "Address not found for the customer"}
+    except City.DoesNotExist:
+        return {"error": "City not found for the address"}
+    except Country.DoesNotExist:
+        return {"error": "Country not found for the city"}
+    except Exception as e:
+        return {"error": str(e)}

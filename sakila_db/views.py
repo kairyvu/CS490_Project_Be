@@ -1,8 +1,9 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from sakila_db.services import getActorDetails, getFilmDetails, getTopActors, getTopRentedFilms, getAllFilms, getAllCustomers, getCustomerRentalHistory
-
+from .services import getActorDetails, getFilmDetails, getTopActors, getTopRentedFilms, getAllFilms, getAllCustomers, getCustomerRentalHistory
+from .services import update_customer_info 
+from .serializers import UpdateCustomerSerializer
 # Create your views here.
 
 class FilmListView(APIView):
@@ -39,3 +40,30 @@ class CustomerRentalsView(APIView):
     def get(self, request, customerId):
         customerRentals = getCustomerRentalHistory(customerId)
         return Response(customerRentals, status=status.HTTP_200_OK)
+
+class UpdateCustomerView(APIView):
+    def put(self, request):
+        serializer = UpdateCustomerSerializer(data=request.data)
+
+        if serializer.is_valid():
+            customer_data = serializer.validated_data
+            result = update_customer_info(customer_data)
+
+            if 'error' in result:
+                return Response({"message": result["error"]}, status=status.HTTP_400_BAD_REQUEST)
+            
+            return Response(result, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        {
+    "customer_id": 1,
+    "first_name": "MARY111",
+    "last_name": "SMITH",
+    "email": "MARY.SMITH@sakilacustomer.org",
+    "address": "1913 Hanoi Way",
+    "district": "Nagasaki",
+    "city": "Sasebo",
+    "country": "Japan",
+    "phone": "28303384290"
+}
