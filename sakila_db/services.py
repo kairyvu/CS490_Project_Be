@@ -1,9 +1,7 @@
-from django.db import connection
-
-from django.utils import timezone
-from rest_framework.exceptions import NotFound
+from django.db import transaction, connection
 from .models import Customer, Address, City, Country
 from django.db import transaction
+from django.db.utils import IntegrityError
 
 def getAllFilms():
     with connection.cursor() as cursor:
@@ -152,3 +150,74 @@ def update_customer_info(customer_data):
         return {"error": "Country not found for the city"}
     except Exception as e:
         return {"error": str(e)}
+
+def execute_sql_query(query, params=None):
+    with connection.cursor() as cursor:
+        cursor.execute(query, params)
+        return cursor.fetchall()
+
+def get_next_id(table_name):
+    query = f"SELECT MAX({table_name}_id) FROM {table_name};"
+    result = execute_sql_query(query)
+    return result[0][0] + 1 if result[0][0] is not None else 1
+
+def create_customer_info(customer_data):
+    try:
+        with transaction.atomic():
+            country_name = customer_data['country']
+            query = "SELECT country_id FROM country WHERE country = %s;"
+            country_result = execute_sql_query(query, [country_name])
+
+            if country_result:
+                country_id = country_result[0][0]
+            else:
+                country_id = get_next_id('country') 
+                query = "INSERT INTO country (country_id, country) VALUES (%s, %s);"
+                execute_sql_query(query, [country_id, country_name])
+
+            city_name = customer_data['city']
+            query = "SELECT city_id FROM city WHERE city = %s AND country_id = %s;"
+            city_result = execute_sql_query(query, [city_name, country_id])
+
+            if city_result:
+                city_id = city_result[0][0]
+            else:
+                city_id = get_next_id('city')
+                query = "INSERT INTO city (city_id, city, country_id) VALUES (%s, %s, %s);"
+                execute_sql_query(query, [city_id, city_name, country_id])
+
+            address_data = customer_data['address']
+            district = customer_data['district']
+            phone = customer_data['phone']
+            query = """
+                SELECT address_id FROM address WHERE address = %s AND district = %s AND phone = %s AND city_id = %s;
+            """
+            address_result = execute_sql_query(query, [address_data, district, phone, city_id])
+
+            if address_result:
+                address_id = address_result[0][0]
+            else:
+                address_id = get_next_id('address')
+                query = """
+                    INSERT INTO address (address_id, address, district, phone, city_id) 
+                    VALUES (%s, %s, %s, %s, %s);
+                """
+                execute_sql_query(query, [address_id, address_data, district, phone, city_id])
+
+            first_name = customer_data['first_name']
+            last_name = customer_data['last_name']
+            email = customer_data['email']
+
+            print(f"c_id: {last_name}")
+
+            query = """
+                INSERT INTO customer (first_name, last_name, email, address_id, create_date, store_id)
+                VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP(), 1);
+            """
+            execute_sql_query(query, [first_name, last_name, email, address_id])
+            return {"message": "Customer and related records added successfully"}
+
+    except IntegrityError as e:
+        return {"error": "Integrity error - possibly duplicate key", "detail": str(e)}
+    except Exception as e:
+        return {"error": "An error occurred while adding the customer", "detail": str(e)}
