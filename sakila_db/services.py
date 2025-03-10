@@ -120,7 +120,7 @@ def update_customer_info(customer_data):
         with transaction.atomic():
             customer = Customer.objects.get(customer_id=customer_data['customer_id'])
             customer.first_name = customer_data['first_name']
-            customer.last_name = customer_data['last_name']
+            customer.last_name = customer_data['last_name']            
             customer.email = customer_data['email']
             customer.save()
 
@@ -215,7 +215,7 @@ def create_customer_info(customer_data):
                 VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP(), 1);
             """
             execute_sql_query(query, [first_name, last_name, email, address_id])
-            return {"message": "Customer and related records added successfully"}
+            return {"message": "Customer added successfully"}
 
     except IntegrityError as e:
         return {"error": "Integrity error - possibly duplicate key", "detail": str(e)}
