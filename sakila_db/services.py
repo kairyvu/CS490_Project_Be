@@ -37,7 +37,7 @@ def getTopRentedFilms(limit=5):
     
 def getFilmDetails(filmId):
     with connection.cursor() as cursor:
-        cursor.execute(f"""SELECT f.title, f.description, f.release_year, f.rental_rate, f.length, f.rating, f.special_features, c.name AS category, COUNT(r.rental_id) AS rental_count, GROUP_CONCAT(DISTINCT CONCAT(UCASE(LEFT(a.first_name, 1)), LCASE(SUBSTRING(a.first_name, 2)), ' ', UCASE(LEFT(a.last_name, 1)), LCASE(SUBSTRING(a.last_name, 2))) ORDER BY a.first_name SEPARATOR ', ') AS actors 
+        cursor.execute(f"""SELECT f.film_id, f.title, f.description, f.release_year, f.rental_rate, f.length, f.rating, f.special_features, c.name AS category, COUNT(r.rental_id) AS rental_count, GROUP_CONCAT(DISTINCT CONCAT(UCASE(LEFT(a.first_name, 1)), LCASE(SUBSTRING(a.first_name, 2)), ' ', UCASE(LEFT(a.last_name, 1)), LCASE(SUBSTRING(a.last_name, 2))) ORDER BY a.first_name SEPARATOR ', ') AS actors 
                        FROM film f
                        JOIN film_category fc ON f.film_id = fc.film_id
                        JOIN category c ON fc.category_id = c.category_id
@@ -247,3 +247,59 @@ def delete_customer(customer_id):
         return JsonResponse({"message": "Integrity error - possible foreign key violation", "detail": str(e)}, status=400)
     except Exception as e:
         return JsonResponse({"message": f"An error occurred: {str(e)}"}, status=500)
+    
+def rent_film(rental_data):
+    try:
+        with transaction.atomic():
+            check_query = """
+                SELECT r.rental_id 
+                FROM rental r
+                JOIN inventory i ON r.inventory_id = i.inventory_id
+                WHERE r.customer_id = %s 
+                AND i.film_id = %s 
+                AND r.return_date IS NULL;
+            """
+            existing_rental = execute_sql_query(check_query, [rental_data["customer_id"], rental_data["film_id"]])
+
+            if existing_rental:
+                return {"error": "Customer has already rented this film and hasn't returned it."}
+            
+            inventory_query = """
+                SELECT i.inventory_id, i.store_id
+                FROM inventory i
+                LEFT JOIN rental r ON i.inventory_id = r.inventory_id AND r.return_date IS NULL
+                WHERE i.film_id = %s
+                AND r.rental_id IS NULL
+                ORDER BY i.store_id ASC
+                LIMIT 1;
+            """
+            inventory_result = execute_sql_query(inventory_query, [rental_data["film_id"]])
+
+            if not inventory_result:
+                return {"error": "No available copies for this film in any store."}
+
+            inventory_id, store_id = inventory_result[0]
+
+            staff_query = """
+                SELECT staff_id
+                FROM staff
+                WHERE store_id = %s
+                LIMIT 1;
+            """
+            staff_result = execute_sql_query(staff_query, [store_id])
+            staff_id = staff_result[0][0]
+
+            rental_query = """
+                INSERT INTO rental (rental_date, inventory_id, customer_id, staff_id)
+                VALUES (CURRENT_TIMESTAMP(), %s, %s, %s);
+            """
+            execute_sql_query(rental_query, [inventory_id, rental_data["customer_id"], staff_id])
+
+            return {
+                "message": "Film rented successfully!",
+                "inventory_id": inventory_id,
+                "store_id": store_id
+            }
+
+    except Exception as e:
+        return {"error": f"An error occurred: {str(e)}"}

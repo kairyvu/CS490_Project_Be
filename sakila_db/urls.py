@@ -1,5 +1,5 @@
 from django.urls import path
-from .views import DeleteCustomerView, TopRentedFilmsView, FilmView, FilmListView, CustomerListView, CustomerRentalsView, TopActorsView, ActorView, UpdateCustomerView, CreateCustomerView
+from .views import DeleteCustomerView, RentFilmView, TopRentedFilmsView, FilmView, FilmListView, CustomerListView, CustomerRentalsView, TopActorsView, ActorView, UpdateCustomerView, CreateCustomerView
 
 urlpatterns = [
     path('api/films/', FilmListView.as_view(), name='getAllFilms'),
@@ -12,4 +12,5 @@ urlpatterns = [
     path('api/update-customer/', UpdateCustomerView.as_view(), name='update_customer'),
     path('api/create-customer/', CreateCustomerView.as_view(), name='create_customer'),
     path('api/delete-customer/<int:customer_id>/', DeleteCustomerView.as_view(), name='delete-customer'),
+    path('api/rent-film/', RentFilmView.as_view(), name='rent_film'),
 ]
