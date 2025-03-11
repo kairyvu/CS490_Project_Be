@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .services import create_customer_info, delete_customer, getActorDetails, getFilmDetails, getTopActors, getTopRentedFilms, getAllFilms, getAllCustomers, getCustomerRentalHistory, rent_film, update_customer_info
+from .services import create_customer_info, delete_customer, getActorDetails, getFilmDetails, getTopActors, getTopRentedFilms, getAllFilms, getAllCustomers, getCustomerRentalHistory, rent_film, return_film, update_customer_info
 from .serializers import UpdateCustomerSerializer, CreateCustomerSerializer
 # Create your views here.
 
@@ -84,3 +84,12 @@ class RentFilmView(APIView):
             return Response({"error": result["error"]}, status=status.HTTP_400_BAD_REQUEST)
         
         return Response(result, status=status.HTTP_201_CREATED)
+
+class ReturnFilmView(APIView):
+    def put(self, request):
+        result = return_film(request.data)
+
+        if 'error' in result:
+            return Response({"error": result["error"]}, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response(result, status=status.HTTP_200_OK)

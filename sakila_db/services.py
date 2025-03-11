@@ -100,7 +100,7 @@ def getAllCustomers():
     
 def getCustomerRentalHistory(customerId):
     with connection.cursor() as cursor:
-        cursor.execute(f"""SELECT c.first_name, c.last_name, f.title AS film_title, r.rental_date, r.return_date,
+        cursor.execute(f"""SELECT f.film_id, c.first_name, c.last_name, f.title AS film_title, r.rental_date, r.return_date,
                        CASE 
                         WHEN r.return_date IS NULL THEN 'Currently Rented'
                         ELSE 'Returned'
@@ -225,7 +225,7 @@ def create_customer_info(customer_data):
     except IntegrityError as e:
         return {"error": "Integrity error - possibly duplicate key", "detail": str(e)}
     except Exception as e:
-        return {"error": "An error occurred while adding the customer", "detail": str(e)}
+        return {"error": str(e)}
     
 def delete_customer(customer_id):
     try:
@@ -246,11 +246,15 @@ def delete_customer(customer_id):
     except IntegrityError as e:
         return JsonResponse({"message": "Integrity error - possible foreign key violation", "detail": str(e)}, status=400)
     except Exception as e:
-        return JsonResponse({"message": f"An error occurred: {str(e)}"}, status=500)
+        return JsonResponse({"message": str(e)}, status=500)
     
 def rent_film(rental_data):
     try:
         with transaction.atomic():
+            customer_query = "SELECT * FROM customer WHERE customer_id = %s;"
+            customer_result = execute_sql_query(customer_query, [rental_data["customer_id"]])
+            if not customer_result:
+                return {"error": "Customer not found."}
             check_query = """
                 SELECT r.rental_id 
                 FROM rental r
@@ -302,4 +306,32 @@ def rent_film(rental_data):
             }
 
     except Exception as e:
-        return {"error": f"An error occurred: {str(e)}"}
+        return {"error": str(e)}
+    
+def return_film(return_data):
+    check_query = """
+        SELECT r.rental_id 
+        FROM rental r
+        JOIN inventory i ON r.inventory_id = i.inventory_id
+        WHERE r.customer_id = %s 
+        AND i.film_id = %s 
+        AND r.return_date IS NULL;
+    """
+    rental_record = execute_sql_query(check_query, [return_data["customer_id"], return_data["film_id"]])
+
+    if not rental_record:
+        return {"error": "No active rental found for this film and customer."}
+
+    rental_id = rental_record[0][0]
+
+    update_query = """
+        UPDATE rental
+        SET return_date = CURRENT_TIMESTAMP
+        WHERE rental_id = %s;
+    """
+    try:
+        with transaction.atomic():
+            execute_sql_query(update_query, [rental_id])
+        return {"message": "Film returned successfully!"}
+    except Exception as e:
+        return {"error": str(e)}
