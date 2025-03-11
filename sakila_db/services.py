@@ -1,13 +1,19 @@
-from django.db import connection
+from django.db import transaction, connection
+from django.http import JsonResponse
+from .models import Customer, Address, City, Country
+from django.db import transaction
+from django.db.utils import IntegrityError
 
 def getAllFilms():
     with connection.cursor() as cursor:
-        cursor.execute("""SELECT f.film_id, f.title, f.description, f.release_year, f.rental_rate, f.length, f.rating, f.special_features, c.name AS category, COUNT(r.rental_id) AS rental_count
+        cursor.execute("""SELECT f.film_id, f.title, f.description, f.release_year, f.rental_rate, f.length, f.rating, f.special_features, c.name AS category, COUNT(r.rental_id) AS rental_count, GROUP_CONCAT(DISTINCT CONCAT(UCASE(LEFT(a.first_name, 1)), LCASE(SUBSTRING(a.first_name, 2)), ' ', UCASE(LEFT(a.last_name, 1)), LCASE(SUBSTRING(a.last_name, 2))) ORDER BY a.first_name SEPARATOR ', ') AS actors
                        FROM film f
                        JOIN film_category fc ON f.film_id = fc.film_id
                        JOIN category c ON fc.category_id = c.category_id
                        JOIN inventory i ON f.film_id = i.film_id
                        LEFT JOIN rental r ON i.inventory_id = r.inventory_id
+                       JOIN film_actor fa ON f.film_id = fa.film_id
+                       JOIN actor a ON fa.actor_id = a.actor_id
                        GROUP BY f.film_id, f.title, category
                        ORDER BY f.title;
                        """)
@@ -31,12 +37,14 @@ def getTopRentedFilms(limit=5):
     
 def getFilmDetails(filmId):
     with connection.cursor() as cursor:
-        cursor.execute(f"""SELECT f.title, f.description, f.release_year, f.rental_rate, f.length, f.rating, f.special_features, c.name AS category, COUNT(r.rental_id) AS rental_count
+        cursor.execute(f"""SELECT f.film_id, f.title, f.description, f.release_year, f.rental_rate, f.length, f.rating, f.special_features, c.name AS category, COUNT(r.rental_id) AS rental_count, GROUP_CONCAT(DISTINCT CONCAT(UCASE(LEFT(a.first_name, 1)), LCASE(SUBSTRING(a.first_name, 2)), ' ', UCASE(LEFT(a.last_name, 1)), LCASE(SUBSTRING(a.last_name, 2))) ORDER BY a.first_name SEPARATOR ', ') AS actors 
                        FROM film f
                        JOIN film_category fc ON f.film_id = fc.film_id
                        JOIN category c ON fc.category_id = c.category_id
                        JOIN inventory i ON f.film_id = i.film_id
-                       LEFT JOIN rental r ON i.inventory_id = r.inventory_id 
+                       LEFT JOIN rental r ON i.inventory_id = r.inventory_id
+                       LEFT JOIN film_actor fa ON f.film_id = fa.film_id
+                       LEFT JOIN actor a ON fa.actor_id = a.actor_id
                        WHERE f.film_id = {filmId}
                        GROUP BY f.film_id, c.name;
                        """)
@@ -80,16 +88,19 @@ def getActorDetails(actorId):
 
 def getAllCustomers():
     with connection.cursor() as cursor:
-        cursor.execute(f"""SELECT customer_id, first_name, last_name, email, address, active, create_date 
-                       FROM customer c
-                       JOIN address a ON c.address_id = a.address_id;
+        cursor.execute(f"""SELECT customer.customer_id, customer.first_name, customer.last_name, customer.email, customer.active, address.address, address.district, city.city, country.country, address.phone, customer.create_date
+                       FROM customer
+                       JOIN address ON customer.address_id = address.address_id
+                       JOIN city ON address.city_id = city.city_id
+                       JOIN country ON city.country_id = country.country_id
+                       ORDER BY customer.customer_id;
                        """)
         columns = [col[0] for col in cursor.description]
         return [dict(zip(columns, row)) for row in cursor.fetchall()]
     
 def getCustomerRentalHistory(customerId):
     with connection.cursor() as cursor:
-        cursor.execute(f"""SELECT c.first_name, c.last_name, f.title AS film_title, r.rental_date, r.return_date,
+        cursor.execute(f"""SELECT f.film_id, c.first_name, c.last_name, f.title AS film_title, r.rental_date, r.return_date,
                        CASE 
                         WHEN r.return_date IS NULL THEN 'Currently Rented'
                         ELSE 'Returned'
@@ -104,3 +115,223 @@ def getCustomerRentalHistory(customerId):
                        """)
         columns = [col[0] for col in cursor.description]
         return [dict(zip(columns, row)) for row in cursor.fetchall()]
+
+def update_customer_info(customer_data):
+    try:
+        with transaction.atomic():
+            customer = Customer.objects.get(customer_id=customer_data['customer_id'])
+            customer.first_name = customer_data['first_name']
+            customer.last_name = customer_data['last_name']            
+            customer.email = customer_data['email']
+            customer.save()
+
+            address = customer.address
+            address.address = customer_data['address']
+            address.district = customer_data['district']
+            address.phone = customer_data['phone']
+            address.save()
+
+            city = address.city
+            city.city = customer_data['city']
+            city.save()
+
+            country = city.country
+            country.country = customer_data['country']
+            country.save()
+
+        return {"message": "Customer and related records updated successfully"}
+
+    except Customer.DoesNotExist:
+        return {"error": "Customer not found"}
+    except Address.DoesNotExist:
+        return {"error": "Address not found for the customer"}
+    except City.DoesNotExist:
+        return {"error": "City not found for the address"}
+    except Country.DoesNotExist:
+        return {"error": "Country not found for the city"}
+    except Exception as e:
+        return {"error": str(e)}
+
+def execute_sql_query(query, params=None):
+    with connection.cursor() as cursor:
+        cursor.execute(query, params)
+        return cursor.fetchall()
+
+def create_customer_info(customer_data):
+    try:
+        with transaction.atomic():
+            country_name = customer_data['country']
+            address_data = customer_data['address']
+            district = customer_data['district']
+            phone = customer_data['phone']
+            first_name = customer_data['first_name']
+            last_name = customer_data['last_name']
+            email = customer_data['email']
+            city_name = customer_data['city']
+
+            query = "SELECT * FROM customer WHERE email = %s"
+            existing_customer = execute_sql_query(query, [email])
+            if existing_customer:
+                return {"error": "A customer with this email already exists"}
+            
+            query = "SELECT * FROM address WHERE phone = %s"
+            existing_address = execute_sql_query(query, [phone])
+            if existing_address:
+                return {"error": "An address with this phone number already exists"}
+            
+            query = "SELECT country_id FROM country WHERE country = %s;"
+            country_result = execute_sql_query(query, [country_name])
+
+            if country_result:
+                country_id = country_result[0][0]
+            else:
+                query = "INSERT INTO country (country) VALUES (%s);"
+                execute_sql_query(query, [country_name])
+                query = "SELECT country_id FROM country WHERE country = %s;"
+                country_result = execute_sql_query(query, [country_name])
+                country_id = country_result[0][0]
+
+
+            query = "SELECT city_id FROM city WHERE city = %s AND country_id = %s;"
+            city_result = execute_sql_query(query, [city_name, country_id])
+
+            if city_result:
+                city_id = city_result[0][0]
+            else:
+                query = "INSERT INTO city (city, country_id) VALUES (%s, %s);"
+                execute_sql_query(query, [city_name, country_id])
+                query = "SELECT city_id FROM city WHERE city = %s AND country_id = %s;"
+                city_result = execute_sql_query(query, [city_name, country_id])
+                city_id = city_result[0][0]
+
+
+            query = """
+                INSERT INTO address (address, district, phone, city_id) 
+                VALUES (%s, %s, %s, %s);
+            """
+            execute_sql_query(query, [address_data, district, phone, city_id])
+            query = "SELECT address_id FROM address WHERE address = %s AND district = %s AND phone = %s AND city_id = %s;"
+            address_result = execute_sql_query(query, [address_data, district, phone, city_id])
+            address_id = address_result[0][0]
+
+
+            query = """
+                INSERT INTO customer (first_name, last_name, email, address_id, create_date, store_id)
+                VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP(), 1);
+            """
+            execute_sql_query(query, [first_name, last_name, email, address_id])
+            return {"message": "Customer added successfully"}
+
+    except IntegrityError as e:
+        return {"error": "Integrity error - possibly duplicate key", "detail": str(e)}
+    except Exception as e:
+        return {"error": str(e)}
+    
+def delete_customer(customer_id):
+    try:
+        with transaction.atomic():
+            customer_query = "SELECT address_id FROM customer WHERE customer_id = %s;"
+            customer_result = execute_sql_query(customer_query, [customer_id])
+            if not customer_result:
+                return {"error": "Customer not found."}
+            address_id = customer_result[0][0]
+            delete_customer_query = "DELETE FROM customer WHERE customer_id = %s;"
+            execute_sql_query(delete_customer_query, [customer_id])
+            delete_address_query = "DELETE FROM address WHERE address_id = %s;"
+            print(customer_id)
+            execute_sql_query(delete_address_query, [address_id])
+            return {"message": "Successfully deleted!"}
+
+
+    except IntegrityError as e:
+        return JsonResponse({"message": "Integrity error - possible foreign key violation", "detail": str(e)}, status=400)
+    except Exception as e:
+        return JsonResponse({"message": str(e)}, status=500)
+    
+def rent_film(rental_data):
+    try:
+        with transaction.atomic():
+            customer_query = "SELECT * FROM customer WHERE customer_id = %s;"
+            customer_result = execute_sql_query(customer_query, [rental_data["customer_id"]])
+            if not customer_result:
+                return {"error": "Customer not found."}
+            check_query = """
+                SELECT r.rental_id 
+                FROM rental r
+                JOIN inventory i ON r.inventory_id = i.inventory_id
+                WHERE r.customer_id = %s 
+                AND i.film_id = %s 
+                AND r.return_date IS NULL;
+            """
+            existing_rental = execute_sql_query(check_query, [rental_data["customer_id"], rental_data["film_id"]])
+
+            if existing_rental:
+                return {"error": "Customer has already rented this film and hasn't returned it."}
+            
+            inventory_query = """
+                SELECT i.inventory_id, i.store_id
+                FROM inventory i
+                LEFT JOIN rental r ON i.inventory_id = r.inventory_id AND r.return_date IS NULL
+                WHERE i.film_id = %s
+                AND r.rental_id IS NULL
+                ORDER BY i.store_id ASC
+                LIMIT 1;
+            """
+            inventory_result = execute_sql_query(inventory_query, [rental_data["film_id"]])
+
+            if not inventory_result:
+                return {"error": "No available copies for this film in any store."}
+
+            inventory_id, store_id = inventory_result[0]
+
+            staff_query = """
+                SELECT staff_id
+                FROM staff
+                WHERE store_id = %s
+                LIMIT 1;
+            """
+            staff_result = execute_sql_query(staff_query, [store_id])
+            staff_id = staff_result[0][0]
+
+            rental_query = """
+                INSERT INTO rental (rental_date, inventory_id, customer_id, staff_id)
+                VALUES (CURRENT_TIMESTAMP(), %s, %s, %s);
+            """
+            execute_sql_query(rental_query, [inventory_id, rental_data["customer_id"], staff_id])
+
+            return {
+                "message": "Film rented successfully!",
+                "inventory_id": inventory_id,
+                "store_id": store_id
+            }
+
+    except Exception as e:
+        return {"error": str(e)}
+    
+def return_film(return_data):
+    check_query = """
+        SELECT r.rental_id 
+        FROM rental r
+        JOIN inventory i ON r.inventory_id = i.inventory_id
+        WHERE r.customer_id = %s 
+        AND i.film_id = %s 
+        AND r.return_date IS NULL;
+    """
+    rental_record = execute_sql_query(check_query, [return_data["customer_id"], return_data["film_id"]])
+
+    if not rental_record:
+        return {"error": "No active rental found for this film and customer."}
+
+    rental_id = rental_record[0][0]
+
+    update_query = """
+        UPDATE rental
+        SET return_date = CURRENT_TIMESTAMP
+        WHERE rental_id = %s;
+    """
+    try:
+        with transaction.atomic():
+            execute_sql_query(update_query, [rental_id])
+        return {"message": "Film returned successfully!"}
+    except Exception as e:
+        return {"error": str(e)}

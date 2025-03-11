@@ -1,8 +1,8 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from sakila_db.services import getActorDetails, getFilmDetails, getTopActors, getTopRentedFilms, getAllFilms, getAllCustomers, getCustomerRentalHistory
-
+from .services import create_customer_info, delete_customer, getActorDetails, getFilmDetails, getTopActors, getTopRentedFilms, getAllFilms, getAllCustomers, getCustomerRentalHistory, rent_film, return_film, update_customer_info
+from .serializers import UpdateCustomerSerializer, CreateCustomerSerializer
 # Create your views here.
 
 class FilmListView(APIView):
@@ -39,3 +39,57 @@ class CustomerRentalsView(APIView):
     def get(self, request, customerId):
         customerRentals = getCustomerRentalHistory(customerId)
         return Response(customerRentals, status=status.HTTP_200_OK)
+
+class UpdateCustomerView(APIView):
+    def put(self, request):
+        serializer = UpdateCustomerSerializer(data=request.data)
+
+        if serializer.is_valid():
+            customer_data = serializer.validated_data
+            result = update_customer_info(customer_data)
+
+            if 'error' in result:
+                return Response({"message": result["error"]}, status=status.HTTP_400_BAD_REQUEST)
+            
+            return Response(result, status=status.HTTP_200_OK)
+
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class CreateCustomerView(APIView):
+    def post(self, request):
+        serializer = CreateCustomerSerializer(data=request.data)
+    
+        if serializer.is_valid():
+            customer_data = serializer.validated_data
+            result = create_customer_info(customer_data)
+            if 'error' in result:
+                return Response({"message": result["error"]}, status=status.HTTP_400_BAD_REQUEST)
+            return Response(result, status=status.HTTP_201_CREATED)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+class DeleteCustomerView(APIView):
+    def delete(self, request, customer_id):
+        result = delete_customer(customer_id)
+
+        if 'error' in result:
+            return Response({"error": result["error"]}, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response({"message": "Customer deleted successfully."}, status=status.HTTP_200_OK)
+    
+class RentFilmView(APIView):
+    def post(self, request):
+        result = rent_film(request.data)
+
+        if 'error' in result:
+            return Response({"error": result["error"]}, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response(result, status=status.HTTP_201_CREATED)
+
+class ReturnFilmView(APIView):
+    def put(self, request):
+        result = return_film(request.data)
+
+        if 'error' in result:
+            return Response({"error": result["error"]}, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response(result, status=status.HTTP_200_OK)
