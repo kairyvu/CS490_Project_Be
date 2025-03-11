@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from .services import create_customer_info, getActorDetails, getFilmDetails, getTopActors, getTopRentedFilms, getAllFilms, getAllCustomers, getCustomerRentalHistory, update_customer_info
+from .services import create_customer_info, delete_customer, getActorDetails, getFilmDetails, getTopActors, getTopRentedFilms, getAllFilms, getAllCustomers, getCustomerRentalHistory, update_customer_info
 from .serializers import UpdateCustomerSerializer, CreateCustomerSerializer
 # Create your views here.
 
@@ -67,3 +67,11 @@ class CreateCustomerView(APIView):
             return Response(result, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
+class DeleteCustomerView(APIView):
+    def delete(self, request, customer_id):
+        result = delete_customer(customer_id)
+
+        if 'error' in result:
+            return Response({"error": result["error"]}, status=status.HTTP_400_BAD_REQUEST)
+        
+        return Response({"message": "Customer deleted successfully."}, status=status.HTTP_200_OK)
